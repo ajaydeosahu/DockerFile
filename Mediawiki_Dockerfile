@@ -1,0 +1,68 @@
+FROM 075100744898.dkr.ecr.eu-central-1.amazonaws.com/mediawiki-base-image:8.2-apache
+WORKDIR /var/www/html
+
+RUN apt-get update && apt-get install -y \
+        libjpeg-dev \
+        libpng-dev \
+        libfreetype6-dev \
+        libjpeg62-turbo-dev \
+        libmcrypt-dev \
+        libzip-dev \
+        libonig-dev \
+        msmtp \
+        vim \
+    && docker-php-ext-install gd zip pdo pdo_mysql mysqli opcache iconv ctype mbstring \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add bullseye repositories to install Python 2.7
+RUN echo "deb http://deb.debian.org/debian bullseye main" > /etc/apt/sources.list.d/bullseye.list && \
+    echo "deb http://deb.debian.org/debian bullseye-updates main" >> /etc/apt/sources.list.d/bullseye.list && \
+    echo "deb http://security.debian.org bullseye-security main" >> /etc/apt/sources.list.d/bullseye.list && \
+    apt-get update
+
+# Filesystem setup
+RUN ln -s /var/www/html /var/www/html/mediawiki
+RUN ln -s /var/www/html /var/www/html/mediawiki-en
+RUN chown -h www-data:www-data /var/www/html/mediawiki
+RUN chown -h www-data:www-data /var/www/html/mediawiki-en
+RUN mkdir cache && chown www-data:www-data cache
+COPY --chown=www-data:www-data . .
+
+
+# Install redis for PHP
+RUN printf "\n" | pecl install redis && rm -rf /tmp/pear && docker-php-ext-enable redis
+
+RUN a2enmod headers && a2enmod rewrite && a2enmod proxy && a2enmod proxy_http && a2enmod ssl && a2enmod expires
+
+# Apache configurations
+COPY container/apache-config/apache.conf /etc/apache2/apache2.conf
+COPY container/apache-config/apache-vhost.conf /etc/apache2/sites-available/000-default.conf
+COPY container/apache-config/security-block-files.conf /etc/apache2/conf-enabled/
+COPY container/apache-config/cache-resources.conf /etc/apache2/conf-enabled/
+COPY container/apache-config/misc.conf /etc/apache2/conf-enabled/
+COPY container/apache-config/prerender-io.conf /etc/apache2/conf-enabled/
+
+# PHP configurations
+COPY container/php-config/misc.ini /usr/local/etc/php/conf.d/
+
+# Install python2.7 for CAS
+RUN apt-get update && apt-get install python2.7 -y
+# Install PIP
+RUN curl -O https://bootstrap.pypa.io/pip/3.4/get-pip.py && python2.7 get-pip.py && rm get-pip.py
+# Install package dependencies for CAS
+RUN pip2.7 install argparse 'antlr4-python2-runtime==4.7.1'
+
+# Install pdflatex and pdf2svg to make PGFTikZ work for SVG images
+RUN apt-get install texlive -y
+RUN apt-get install texlive-latex-extra -y
+RUN cp -r /var/www/html/mediawiki/extensions/PGFTikZ/tex/bildpaket /usr/share/texmf/tex/latex
+RUN cp -r /var/www/html/mediawiki/extensions/PGFTikZ/tex/numprint /usr/share/texmf/tex/latex
+RUN chmod o+rx /usr/share/texmf/tex/latex/bildpaket -R
+RUN chmod o+rx /usr/share/texmf/tex/latex/numprint -R
+RUN texhash
+RUN apt-get install texlive-lang-european -y
+RUN apt-get install pdf2svg -y
+RUN ln -s /usr/bin/pdf2svg /usr/local/bin
+
+# Install ImageMagick to generate thumbnails in wiki
+RUN apt-get install imagemagick -y

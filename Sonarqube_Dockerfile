@@ -1,0 +1,2 @@
+FROM ubuntu:20.04
+RUN apt update -y ; apt -y install curl apt-utils ; apt -y install awscli openjdk-11-jdk jq nodejs unzip wget ;

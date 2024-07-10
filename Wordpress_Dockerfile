@@ -1,0 +1,27 @@
+FROM 075100744898.dkr.ecr.eu-central-1.amazonaws.com/wordpress-base-image:5.5.3-php7.4-apache
+WORKDIR /var/www/html
+
+# Dependencies
+RUN apt-get update && apt-get install libxml2-dev vim wget -y && docker-php-ext-install soap
+RUN printf "\n" | pecl install redis && rm -rf /tmp/pear && docker-php-ext-enable redis
+RUN a2enmod headers && a2enmod proxy && a2enmod proxy_http && a2enmod ssl && a2enmod expires
+RUN wget https://github.com/elastic/apm-agent-php/releases/download/v1.8.4/apm-agent-php_1.8.4_all.deb -P /var/www/html && ls -la /var/www/html && dpkg -i /var/www/html/apm-agent-php_1.8.4_all.deb 
+
+# wp-cli installation, consider doing this with a docker image instead in the future
+RUN curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar && chmod +x wp-cli.phar && mv wp-cli.phar /usr/local/bin/wp
+# wp-cli dependencies
+RUN apt-get install less -y
+
+COPY --chown=www-data:www-data . .
+
+# Apache configurations
+COPY container/apache-config/security-block-files.conf /etc/apache2/conf-enabled/
+COPY container/apache-config/cache-resources.conf /etc/apache2/conf-enabled/
+COPY container/apache-config/prerender-io.conf /etc/apache2/conf-enabled/
+COPY container/apache-config/misc.conf /etc/apache2/conf-enabled/
+
+# PHP configurations
+COPY container/php-config/misc.ini /usr/local/etc/php/conf.d/
+# COPY container/php-config/99-elastic-apm-custom.ini /usr/local/etc/php/conf.d/
+
+EXPOSE 80

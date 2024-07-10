@@ -1,0 +1,11 @@
+FROM ubuntu:20.04
+
+RUN apt-get update -y && \
+    apt-get install -y \
+    openjdk-11-jre-headless \
+    wget && \
+    wget https://github.com/zaproxy/zaproxy/releases/download/v2.11.0/ZAP_2.11.0_Linux.tar.gz && \
+    tar -xvzf ZAP_2.11.0_Linux.tar.gz && \
+    rm ZAP_2.11.0_Linux.tar.gz && \
+    mv ZAP_2.11.0 /opt/zaproxy \
+    apt -y install awscli
